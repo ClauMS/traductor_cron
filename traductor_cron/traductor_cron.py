@@ -6,8 +6,7 @@ from croniter import croniter
 
 class CronTranslator:
     """
-    Traductor de expresiones cron al español 
-    con implementación simplificada.
+    Traductor de expresiones cron al español con traducciones más naturales.
     """
     
     _MONTH_NAMES = [
@@ -21,11 +20,6 @@ class CronTranslator:
     ]
     
     def __init__(self, log_level: int = logging.INFO):
-        """
-        Inicializa el traductor con configuraciones básicas.
-        
-        :param log_level: Nivel de logging
-        """
         logging.basicConfig(
             level=log_level,
             format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -33,55 +27,77 @@ class CronTranslator:
         self.logger = logging.getLogger(self.__class__.__name__)
     
     def _validate_cron_expression(self, expression: str) -> bool:
-        """
-        Valida la sintaxis de la expresión cron.
-        
-        :param expression: Expresión cron a validar
-        :return: Booleano indicando si la expresión es válida
-        """
+        """Valida la sintaxis de la expresión cron."""
         try:
             croniter(expression)
             return True
         except (ValueError, TypeError):
             return False
     
-    def _parse_field(
-        self, 
-        value: str, 
-        type_name: str, 
-        names_list: Optional[List[str]] = None
-    ) -> str:
-        """
-        Parsea campos individuales de una expresión cron.
-        
-        :param value: Valor del campo
-        :param type_name: Tipo de campo (minuto, hora, etc)
-        :param names_list: Lista opcional de nombres para mapeo
-        :return: Descripción traducida del campo
-        """
+    def _parse_minutes(self, value: str) -> str:
+        """Parsea el campo de minutos."""
         if value == '*':
-            return f'cada {type_name}'
-        
-        # Manejar conjuntos de valores
+            return ''
+        if value == '*/5':
+            return 'cada 5 minutos'
         if ',' in value:
-            valores = value.split(',')
-            if names_list:
-                return f'los {", ".join(names_list[int(v)] for v in valores if int(v) < len(names_list))}'
-            return f'{type_name}s: {", ".join(valores)}'
-        
-        # Manejar rangos
-        if '-' in value:
-            inicio, fin = map(int, value.split('-'))
-            if names_list:
-                return f'de {names_list[inicio]} a {names_list[fin]}'
-            return f'{type_name}s del {inicio} al {fin}'
-        
-        # Manejar intervalos
+            return f'en los minutos {value}'
         if '/' in value:
             _, intervalo = value.split('/')
-            return f'cada {intervalo} {type_name}s'
-        
-        return value
+            return f'cada {intervalo} minutos'
+        return f'en el minuto {value}'
+    
+    def _parse_hours(self, value: str) -> str:
+        """Parsea el campo de horas."""
+        if value == '*':
+            return ''
+        if value == '*/2':
+            return 'cada 2 horas'
+        if ',' in value:
+            return f'a las {value.replace(",", " y")} horas'
+        return f'a las {value} horas'
+    
+    def _parse_days_of_month(self, value: str) -> str:
+        """Parsea los días del mes."""
+        if value == '*':
+            return 'todos los días'
+        if value == 'L':
+            return 'el último día del mes'
+        if ',' in value:
+            return f'los días {value}'
+        return f'el día {value}'
+    
+    def _parse_months(self, value: str) -> str:
+        """Parsea los meses."""
+        if value == '*':
+            return 'todos los meses'
+        if value == '*/2':
+            return 'cada dos meses'
+        if ',' in value:
+            return f'en {", ".join(self._MONTH_NAMES[int(m)-1] for m in value.split(","))}'
+        if '-' in value:
+            inicio, fin = map(int, value.split('-'))
+            return f'de {self._MONTH_NAMES[inicio-1]} a {self._MONTH_NAMES[fin-1]}'
+        try:
+            return f'en {self._MONTH_NAMES[int(value)-1]}'
+        except (ValueError, IndexError):
+            return f'en el mes {value}'
+    
+    def _parse_days_of_week(self, value: str) -> str:
+        """Parsea los días de la semana."""
+        if value == '*':
+            return 'todos los días'
+        if value == '1-5':
+            return 'en días laborables'
+        if ',' in value:
+            return f'los {", ".join(self._DAY_NAMES[int(d)] for d in value.split(","))}'
+        if '-' in value:
+            inicio, fin = map(int, value.split('-'))
+            return f'de {self._DAY_NAMES[inicio]} a {self._DAY_NAMES[fin]}'
+        try:
+            return f'los {self._DAY_NAMES[int(value)]}'
+        except (ValueError, IndexError):
+            return f'en el día {value}'
     
     def translate(self, cron_expression: str) -> str:
         """
@@ -90,44 +106,58 @@ class CronTranslator:
         :param cron_expression: Expresión cron estándar
         :return: Descripción en español de la ejecución
         """
-        if not self._validate_cron_expression(cron_expression):
+        # Completar la expresión con comodines si es necesario
+        partes = cron_expression.split()
+        while len(partes) < 5:
+            partes.append('*')
+        
+        if not self._validate_cron_expression(' '.join(partes)):
             raise ValueError(f"Expresión cron inválida: {cron_expression}")
         
-        try:
-            minute, hour, day_of_month, month, day_of_week = cron_expression.split()
-        except ValueError:
-            raise ValueError("Formato de expresión cron inválido.")
+        minute, hour, day_of_month, month, day_of_week = partes
         
-        translations = []
+        # Construir la traducción de manera más natural
+        traduccion_partes = []
         
         # Minutos
-        translations.append(self._parse_field(minute, 'minuto'))
+        minutos = self._parse_minutes(minute)
+        if minutos:
+            traduccion_partes.append(minutos)
         
         # Horas
-        translations.append(self._parse_field(hour, 'hora'))
+        horas = self._parse_hours(hour)
+        if horas:
+            traduccion_partes.append(horas)
         
         # Días del mes
-        translations.append(self._parse_field(day_of_month, 'día del mes'))
+        dias_mes = self._parse_days_of_month(day_of_month)
+        if dias_mes:
+            traduccion_partes.append(dias_mes)
         
         # Meses
-        translations.append(self._parse_field(month, 'mes', self._MONTH_NAMES))
+        meses = self._parse_months(month)
+        if meses:
+            traduccion_partes.append(meses)
         
         # Días de la semana
-        translations.append(self._parse_field(day_of_week, 'día', self._DAY_NAMES))
+        dias_semana = self._parse_days_of_week(day_of_week)
+        if dias_semana:
+            traduccion_partes.append(dias_semana)
         
-        return ' '.join(translations)
+        # Unir las partes de manera coherente
+        traduccion = ' '.join(traduccion_partes)
+        return traduccion.capitalize() if traduccion else 'Sin programación específica'
     
     def get_next_executions(self, cron_expression: str, count: int = 5) -> List[datetime]:
-        """
-        Calcula las próximas ejecuciones de una expresión cron.
-        
-        :param cron_expression: Expresión cron
-        :param count: Número de próximas ejecuciones
-        :return: Lista de próximas fechas de ejecución
-        """
+        """Calcula las próximas ejecuciones de una expresión cron."""
         try:
+            # Completar la expresión con comodines si es necesario
+            partes = cron_expression.split()
+            while len(partes) < 5:
+                partes.append('*')
+            
             base = datetime.now()
-            cron = croniter(cron_expression, base)
+            cron = croniter(' '.join(partes), base)
             return [cron.get_next(datetime) for _ in range(count)]
         except Exception as e:
             self.logger.error(f"Error calculando próximas ejecuciones: {e}")
