@@ -1,1 +1,4 @@
 venv
+build
+dist
+traductor_cron.egg-info
