@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='traductor_cron',
-    version='0.1.0',
+    version='0.1.1',
     author='Claudiano Maniega',
     author_email='cmaniega@ovosoftware.cl',
     description='Una librería para traducir expresiones cron al español y calcular próximas ejecuciones.',
